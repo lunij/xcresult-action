@@ -1,0 +1,37 @@
+name: xcresult
+description: 'Generates GitHub Markdown from a Xcode result bundle and shows it as a GitHub Check'
+author: Lunij
+inputs:
+  path:
+    description: 'Path to the xcresult bundle'
+    required: true
+  title:
+    description: 'Title for the created GitHub Check'
+    required: true
+  token:
+    description: 'The GitHub authentication token'
+    default: ${{ github.token }}
+  show-passed-tests:
+    description: 'Show passed tests'
+    default: false
+  show-code-coverage:
+    description: 'Show code coverage'
+    default: true
+  show-file-coverage:
+    description: 'Show file coverage'
+    default: true
+  show-test-summaries:
+    description: 'Show summaries for all test classes'
+    default: false
+  show-test-details:
+    description: 'Show details for all test classes'
+    default: false
+  upload:
+    description: 'Upload the xcresult bundle(s). Possible values: always, failure, never'
+    default: failure
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
+branding:
+  icon: 'file-text'
+  color: 'blue'
