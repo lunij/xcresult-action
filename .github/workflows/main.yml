@@ -21,6 +21,8 @@ jobs:
   examples:
     name: Examples
     runs-on: macos-latest
+    permissions:
+      checks: write
     steps:
       - uses: actions/checkout@v4
       - name: Netbob.xcresult
