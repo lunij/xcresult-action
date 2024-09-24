@@ -86,7 +86,7 @@ async function run(): Promise<void> {
         name: title,
         head_sha: sha,
         status: 'completed',
-        conclusion: report.testStatus,
+        conclusion: 'neutral',
         output
       })
 
