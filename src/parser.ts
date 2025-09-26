@@ -1,7 +1,18 @@
 export class Parser {
   static async parse(json: string): Promise<any> {
     const root = JSON.parse(json)
-    return this.parseObject(root) as any
+    if (this.isLegacySchema(root)) {
+      return this.parseObject(root) as any
+    } else {
+      return root
+    }
+  }
+
+  private static isLegacySchema(element: any): boolean {
+    if (typeof element !== 'object' || element === null) {
+      return false
+    }
+    return '_type' in element || '_value' in element || '_values' in element
   }
 
   private static parseObject(element: object): object {
