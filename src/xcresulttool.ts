@@ -3,7 +3,11 @@ import { promises } from 'fs'
 const { readFile } = promises
 
 export class XCResultTool {
-  static async version(): Promise<{ version: string; formatVersion: string }> {
+  static async version(): Promise<{
+    version: string
+    schemaVersion?: string | null
+    formatVersion?: string | null
+  }> {
     let output = ''
 
     const options = {
@@ -17,16 +21,23 @@ export class XCResultTool {
 
     await exec('xcrun', ['xcresulttool', 'version'], options)
 
-    const versionMatch = output.match(/xcresulttool version (\d+), format version ([\d.]+)/)
+    // Handles:
+    // - "xcresulttool version 25, format version 3.51"
+    // - "xcresulttool version 24056, schema version: 0.1.0 (legacy commands format version: 3.54)"
+    // - "xcresulttool version 26.0 (format 3.60)"
+    const versionMatch = output.match(
+      /xcresulttool(?: version)? (\d+(?:\.\d+)?)(?:, schema version: ([\d.]+))?(?:.*format(?: version)?:? ([\d.]+))?/i
+    )
 
     if (!versionMatch) {
-      throw new Error('Failed to parse version string')
+      throw new Error(`Failed to parse version string: ${output}`)
     }
 
-    return {
-      version: versionMatch[1],
-      formatVersion: versionMatch[2]
-    }
+    const version = versionMatch[1]
+    const schemaVersion = versionMatch[2] || null
+    const formatVersion = versionMatch[3] || null
+
+    return { version, schemaVersion, formatVersion }
   }
 
   static async json(xcResultPath: string, reference?: string): Promise<string> {
@@ -34,11 +45,17 @@ export class XCResultTool {
     const args = ['xcresulttool', 'get', '--path', xcResultPath, '--format', 'json']
 
     if (reference) {
-      args.push('--id')
-      args.push(reference)
+      args.push('--id', reference)
     }
 
-    if (parseFloat(versionInfo.formatVersion) > 3.49) {
+    // Determine if --legacy flag is required
+    // - Old Xcode: formatVersion like "3.51" → numeric compare
+    // - New Xcode 16: only "schema version" available → always requires --legacy
+    const needsLegacy =
+      (versionInfo.formatVersion && parseFloat(versionInfo.formatVersion) > 3.49) ||
+      (!versionInfo.formatVersion && !!versionInfo.schemaVersion)
+
+    if (needsLegacy) {
       args.push('--legacy')
     }
 
@@ -75,13 +92,18 @@ export class XCResultTool {
       reference
     ]
 
-    if (parseFloat(versionInfo.formatVersion) > 3.49) {
+    // Determine if --legacy flag is required
+    // - Old Xcode: formatVersion like "3.51" → numeric compare
+    // - New Xcode 16: only "schema version" available → always requires --legacy
+    const needsLegacy =
+      (versionInfo.formatVersion && parseFloat(versionInfo.formatVersion) > 3.49) ||
+      (!versionInfo.formatVersion && !!versionInfo.schemaVersion)
+
+    if (needsLegacy) {
       args.push('--legacy')
     }
 
-    const options = {
-      silent: true
-    }
+    const options = { silent: true }
 
     try {
       await exec('xcrun', args, options)
