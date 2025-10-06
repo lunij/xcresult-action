@@ -155338,8 +155338,19 @@ class Parser {
     static parse(json) {
         return __awaiter(this, void 0, void 0, function* () {
             const root = JSON.parse(json);
-            return this.parseObject(root);
+            if (this.isLegacySchema(root)) {
+                return this.parseObject(root);
+            }
+            else {
+                return root;
+            }
         });
+    }
+    static isLegacySchema(element) {
+        if (typeof element !== 'object' || element === null) {
+            return false;
+        }
+        return '_type' in element || '_value' in element || '_values' in element;
     }
     static parseObject(element) {
         const obj = {};
@@ -155422,14 +155433,18 @@ class XCResultTool {
                 }
             };
             yield (0,exec.exec)('xcrun', ['xcresulttool', 'version'], options);
-            const versionMatch = output.match(/xcresulttool version (\d+), format version ([\d.]+)/);
+            // Handles:
+            // - "xcresulttool version 25, format version 3.51"
+            // - "xcresulttool version 24056, schema version: 0.1.0 (legacy commands format version: 3.54)"
+            // - "xcresulttool version 26.0 (format 3.60)"
+            const versionMatch = output.match(/xcresulttool(?: version)? (\d+(?:\.\d+)?)(?:, schema version: ([\d.]+))?(?:.*format(?: version)?:? ([\d.]+))?/i);
             if (!versionMatch) {
-                throw new Error('Failed to parse version string');
+                throw new Error(`Failed to parse version string: ${output}`);
             }
-            return {
-                version: versionMatch[1],
-                formatVersion: versionMatch[2]
-            };
+            const version = versionMatch[1];
+            const schemaVersion = versionMatch[2] || null;
+            const formatVersion = versionMatch[3] || null;
+            return { version, schemaVersion, formatVersion };
         });
     }
     static json(xcResultPath, reference) {
@@ -155437,10 +155452,14 @@ class XCResultTool {
             const versionInfo = yield this.version();
             const args = ['xcresulttool', 'get', '--path', xcResultPath, '--format', 'json'];
             if (reference) {
-                args.push('--id');
-                args.push(reference);
+                args.push('--id', reference);
             }
-            if (parseFloat(versionInfo.formatVersion) > 3.49) {
+            // Determine if --legacy flag is required
+            // - Old Xcode: formatVersion like "3.51" → numeric compare
+            // - New Xcode 16: only "schema version" available → always requires --legacy
+            const needsLegacy = (versionInfo.formatVersion && parseFloat(versionInfo.formatVersion) > 3.49) ||
+                (!versionInfo.formatVersion && !!versionInfo.schemaVersion);
+            if (needsLegacy) {
                 args.push('--legacy');
             }
             let output = '';
@@ -155471,12 +155490,15 @@ class XCResultTool {
                 '--id',
                 reference
             ];
-            if (parseFloat(versionInfo.formatVersion) > 3.49) {
+            // Determine if --legacy flag is required
+            // - Old Xcode: formatVersion like "3.51" → numeric compare
+            // - New Xcode 16: only "schema version" available → always requires --legacy
+            const needsLegacy = (versionInfo.formatVersion && parseFloat(versionInfo.formatVersion) > 3.49) ||
+                (!versionInfo.formatVersion && !!versionInfo.schemaVersion);
+            if (needsLegacy) {
                 args.push('--legacy');
             }
-            const options = {
-                silent: true
-            };
+            const options = { silent: true };
             try {
                 yield (0,exec.exec)('xcrun', args, options);
                 return Buffer.from(yield readFile(outputPath));

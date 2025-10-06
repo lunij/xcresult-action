@@ -30,6 +30,7 @@ describe('XCResultTool', () => {
 
       expect(result).toEqual({
         version: '23025',
+        schemaVersion: null,
         formatVersion: '3.53'
       })
 
